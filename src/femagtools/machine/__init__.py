@@ -14,18 +14,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def __scale_losses(losses, lfe):
-    if losses:
-        l = {k: lfe*np.array(losses[k]) for k in (
-            'styoke_hyst', 'styoke_eddy',
-            'stteeth_hyst', 'stteeth_eddy',
-            'rotor_hyst', 'rotor_eddy',
-            'magnet')}
-        l['speed'] = losses['speed']
-        return l
-    return {}
-
-
 def create_from_eecpars(temp, eecpars, lfe=1, wdg=1):
     """create machine according to the eecpars:
     PM, EESM or IM"""
@@ -70,6 +58,8 @@ def create_from_eecpars(temp, eecpars, lfe=1, wdg=1):
             losses = __scale_losses(dqp['losses'], rlfe)
             losses['ef'] = dqpars[-1]['losses']['ef']
             losses['eh'] = dqpars[-1]['losses']['ef']
+            if 'cf' in dqpars[-1]['losses']: # bertotti excess term
+                losses['cf'] = dqpars[-1]['losses']['cf']
         except KeyError as e:
             logger.warning(e)
             losses = {}
@@ -126,6 +116,10 @@ def __scale_losses(losses, rlfe):
             'stteeth_hyst', 'stteeth_eddy',
             'rotor_hyst', 'rotor_eddy',
             'magnet')}
+        if 'styoke_excess' in losses: 
+            l.update({k: rlfe*np.array(losses[k]) 
+                    for k in ('styoke_excess', 'stteeth_excess', 
+                    'rotor_excess')})
         l['speed'] = losses['speed']
         return l
     return {}

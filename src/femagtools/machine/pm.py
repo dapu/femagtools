@@ -75,7 +75,7 @@ class PmRelMachine(object):
         # tcu: (float) conductor temperature in °C
         # kth: (float) temperature coefficient (default 3.9 e-3)
         self.skin_resistance = None
-
+        self.bertotti = False
         # TODO: need this for speedranges and idq_imax_umax mtpv only
         self.check_extrapolation = True
         for k in kwargs.keys():
@@ -613,6 +613,7 @@ class PmRelMachine(object):
         self.fo = pfe['speed']*self.p
         ef = pfe.get('ef', [2.0, 2.0])
         hf = pfe.get('hf', [1.0, 1.0])
+        cf = pfe.get('cf', [1.5, 1.5])
         self.plexp = {'styoke_hyst': hf[0],
                       'stteeth_hyst': hf[0],
                       'styoke_eddy': ef[0],
@@ -620,6 +621,13 @@ class PmRelMachine(object):
                       'rotor_hyst': hf[1],
                       'rotor_eddy': ef[1]}
         #                          'magnet'):
+        if 'styoke_excess' in pfe: 
+            self.plexp.update({
+                'styoke_excess': cf[0], 
+                'stteeth_excess': cf[0], 
+                'rotor_excess': cf[1], 
+            })
+            self.bertotti = True
 
     def betai1_plcu(self, i1, w1=0):
         return self.m*self.rstat(w1)*i1**2
@@ -1311,18 +1319,24 @@ class PmRelMachinePsidq(PmRelMachine):
         return iqmax, np.max(self.idrange)
 
     def iqd_plfe1(self, iq, id, f1):
+        losskeys = ['styoke_eddy', 'styoke_hyst',
+                  'stteeth_eddy', 'stteeth_hyst']
+        if self.bertotti: 
+            losskeys += ['styoke_excess', 'stteeth_excess']
         return np.sum([
             self._losses[k](iq, id)*(f1/self.fo)**self.plexp[k] for
-            k in ('styoke_eddy', 'styoke_hyst',
-                  'stteeth_eddy', 'stteeth_hyst')], axis=0)
+            k in tuple(losskeys), axis=0)
 
     def betai1_plfe1(self, beta, i1, f1):
         return self.iqd_plfe1(*iqd(beta, i1), f1)
 
     def iqd_plfe2(self, iq, id, f1):
+        losskeys = ['rotor_eddy', 'rotor_hyst']
+        if self.bertotti: 
+            losskeys += ['rotor_excess']
         return np.sum([
             self._losses[k](iq, id)*(f1/self.fo)**self.plexp[k] for
-            k in ('rotor_eddy', 'rotor_hyst',)], axis=0)
+            k in tuple(losskeys)], axis=0)
 
     def betai1_plfe2(self, beta, i1, f1):
         return self.iqd_plfe2(*iqd(beta, i1), f1)
